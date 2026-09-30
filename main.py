@@ -1,7 +1,7 @@
 """
 Utilizando Open-Meteo para dados:
 - Dados DIÁRIOS do dia atual (Tmin/Tmax/média, umidade, vento, radiação
-  somada no dia e ET0)
+  somada no dia e ET0), via parâmetro 'daily' com forecast_days=1
 """
 
 import requests
@@ -64,6 +64,7 @@ def buscar_dados_diarios(
         "wind_speed_10m_mean",
         "wind_direction_10m_dominant",
         "shortwave_radiation_sum",
+        "precipitation_sum",
         "et0_fao_evapotranspiration",
     ]
 
@@ -72,7 +73,7 @@ def buscar_dados_diarios(
         "longitude": longitude,
         "daily": ",".join(variaveis_diarias),
         "timezone": timezone,
-        "forecast_days": 1,  # Seleciona o primeiro dia (data atual)
+        "forecast_days": 1,  # só hoje, não a semana inteira de previsão
     }
 
     resposta = requests.get(url, params=parametros, timeout=30)
@@ -93,6 +94,7 @@ def buscar_dados_diarios(
             "wind_speed_10m_mean": "velocidade_vento_media_kmh",
             "wind_direction_10m_dominant": "direcao_vento_dominante_graus",
             "shortwave_radiation_sum": "radiacao_solar_total_mjm2",
+            "precipitation_sum": "precipitacao_total_mm",
             "et0_fao_evapotranspiration": "evapotranspiracao_referencia_et0_mm",
         },
         inplace=True,
