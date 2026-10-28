@@ -1,0 +1,103 @@
+{% extends "base.html" %}
+{% block conteudo %}
+<a href="/manejo" class="small">&larr; Voltar para o manejo</a>
+<h1 class="h4 mt-2 mb-0">{{ parcela.nome }}</h1>
+<p class="text-muted small">{{ parcela.fazenda.nome }} · {{ parcela.cultura.nome }} · manejo de
+  {{ parcela.manejo_inicio.strftime("%d/%m/%Y") }} a {{ parcela.manejo_fim.strftime("%d/%m/%Y") }}</p>
+
+{% if itn %}
+<div class="alert {{ 'alert-warning' if itn.mm > 0 else 'alert-success' }} py-2">
+  <strong>ITN (irrigação necessária) em {{ itn.data.strftime("%d/%m/%Y") }}:</strong>
+  {% if itn.mm > 0 %}{{ "%.1f"|format(itn.mm) }} mm, cerca de {{ itn.min | round | int }} min com o equipamento da parcela ({{ parcela.equipamento.nome }}).
+  {% else %}nenhuma, o solo está acima do limite de umidade crítica.{% endif %}
+</div>
+{% endif %}
+{% if not dias %}
+<div class="alert alert-info">Esta parcela ainda não tem resultados. Volte ao <a href="/manejo">manejo</a> e clique em "Rodar manejo".</div>
+{% else %}
+<style>
+  .grafico { position: relative; height: 340px; }
+  .grafico-pequeno { height: 240px; }
+</style>
+
+<section class="card card-body shadow-sm mb-3">
+  <h2 class="h6">Balanço hídrico</h2>
+  <p class="small text-muted mb-2">Barras: água que entra e sai (mm/dia). Linhas: água no solo (mm).</p>
+  <div class="grafico"><canvas id="g-balanco" role="img" aria-label="Balanço hídrico: precipitação, irrigação, percolação, umidade do solo, capacidade de campo, umidade crítica e ponto de murcha, por dia"></canvas></div>
+</section>
+<div class="row g-3 mb-3">
+  <section class="col-md-7"><div class="card card-body shadow-sm h-100">
+    <h2 class="h6">ETo e ETc</h2>
+    <div class="grafico grafico-pequeno"><canvas id="g-et" role="img" aria-label="Evapotranspiração de referência e da cultura, por dia"></canvas></div>
+  </div></section>
+  <section class="col-md-5"><div class="card card-body shadow-sm h-100">
+    <h2 class="h6">Coeficiente da cultura (Kc)</h2>
+    <div class="grafico grafico-pequeno"><canvas id="g-kc" role="img" aria-label="Coeficiente da cultura Kc, por dia"></canvas></div>
+  </div></section>
+</div>
+
+<details class="mb-4">
+  <summary>Ver os dados em tabela</summary>
+  <div class="table-responsive mt-2"><table class="table table-sm table-striped bg-white small">
+    <thead><tr><th>Data</th><th>Chuva</th><th>Irrigação aplicada</th><th>Irrigação recomendada</th><th>Percolação</th><th>ETo</th><th>ETc</th><th>Kc</th>
+      <th>Umidade do solo</th><th>Cap. de campo</th><th>Umid. crítica</th><th>Ponto de murcha</th></tr></thead>
+    <tbody>{% for r in dias %}{% set v = r.valores %}
+      <tr><td>{{ r.data.strftime("%d/%m/%Y") }}</td><td>{{ "%.2f"|format(v.precipitacao) }}</td><td>{{ "%.2f"|format(v.irrigacao) }}{% if v.get("lancada") %} *{% endif %}</td>
+          <td>{{ "%.2f"|format(v.get("irrigacao_recomendada", v.irrigacao)) }}</td>
+          <td>{{ "%.2f"|format(v.dp) }}</td><td>{{ "%.2f"|format(v.eto) }}</td><td>{{ "%.2f"|format(v.etca) }}</td>
+          <td>{{ "%.3f"|format(v.kc) }}</td><td>{{ "%.2f"|format(v.ua) }}</td><td>{{ "%.2f"|format(v.fc) }}</td>
+          <td>{{ "%.2f"|format(v.f) }}</td><td>{{ "%.2f"|format(v.pmp) }}</td></tr>
+    {% endfor %}</tbody>
+  </table></div>
+  <p class="small text-muted">* irrigação informada em Lançamentos. Nos demais dias vale a recomendada.</p>
+</details>
+
+<script id="dados" type="application/json">{{ dados | tojson }}</script>
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.4/dist/chart.umd.min.js"></script>
+<script>
+const D = JSON.parse(document.getElementById("dados").textContent);
+// Paleta categórica validada (ordem fixa dos slots); a cor segue a série em todos os gráficos
+const COR = ["#2a78d6", "#eb6834", "#1baf7a", "#eda100", "#e87ba4", "#008300", "#6250d6"];
+const TEXTO = "#52514e", GRADE = "#e6e5e1", SUPERFICIE = "#fcfcfb";
+const poucos = D.datas.length <= 15;  // com poucos dias, mostra os pontos para a linha não sumir
+
+const linha = (label, data, i) => ({type: "line", label, data, borderColor: COR[i], backgroundColor: COR[i], borderWidth: 2,
+  tension: 0, pointRadius: poucos ? 3 : 0, pointHoverRadius: 5, pointBorderColor: SUPERFICIE, pointBorderWidth: 2});
+const barra = (label, data, i) => ({type: "bar", label, data, backgroundColor: COR[i], borderColor: SUPERFICIE, borderWidth: 2,
+  borderRadius: 4, borderSkipped: false, maxBarThickness: 14});
+
+// linha vertical que acompanha o ponteiro
+const mira = {id: "mira", afterDatasetsDraw(chart) {
+  const ativo = chart.tooltip && chart.tooltip.getActiveElements();
+  if (!ativo || !ativo.length) return;
+  const x = ativo[0].element.x, a = chart.chartArea, c = chart.ctx;
+  c.save(); c.strokeStyle = TEXTO; c.globalAlpha = 0.35; c.lineWidth = 1;
+  c.beginPath(); c.moveTo(x, a.top); c.lineTo(x, a.bottom); c.stroke(); c.restore();
+}};
+
+function grafico(id, tipo, datasets, unidade) {
+  new Chart(document.getElementById(id), {
+    type: tipo, data: {labels: D.datas, datasets}, plugins: [mira],
+    options: {
+      responsive: true, maintainAspectRatio: false, interaction: {mode: "index", intersect: false},
+      plugins: {
+        legend: {position: "bottom", labels: {color: TEXTO, usePointStyle: true, boxWidth: 8}},
+        tooltip: {callbacks: {label: c => `${c.dataset.label}: ${c.formattedValue} ${unidade}`}},
+      },
+      scales: {
+        x: {grid: {display: false}, ticks: {color: TEXTO, maxRotation: 45, autoSkipPadding: 12}},
+        y: {grid: {color: GRADE}, ticks: {color: TEXTO}, title: {display: true, text: unidade, color: TEXTO}},
+      },
+    },
+  });
+}
+
+grafico("g-balanco", "bar", [
+  linha("Umidade do solo", D.ua, 0), linha("Capacidade de campo", D.fc, 1), linha("Umidade crítica", D.f, 2),
+  linha("Ponto de murcha", D.pmp, 3), barra("Precipitação", D.precipitacao, 4), barra("Irrigação", D.irrigacao, 5),
+  barra("Percolação", D.dp, 6)], "mm");
+grafico("g-et", "line", [linha("ETo", D.eto, 0), linha("ETc", D.etca, 1)], "mm/dia");
+grafico("g-kc", "line", [linha("Kc", D.kc, 0)], "Kc");
+</script>
+{% endif %}
+{% endblock %}

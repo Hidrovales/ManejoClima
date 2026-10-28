@@ -1,0 +1,52 @@
+{% extends "base.html" %}
+{% block conteudo %}
+<h1 class="h4">Cadastro de fazenda</h1>
+<form method="post" action="/fazendas" class="card card-body shadow-sm mb-4">
+  <div class="row g-3">
+    <div class="col-md-6"><label class="form-label" for="nome">Nome da fazenda</label>
+      <input class="form-control" id="nome" name="nome" required></div>
+    <div class="col-md-6"><label class="form-label" for="proprietario">Proprietário</label>
+      <input class="form-control" id="proprietario" name="proprietario"></div>
+    <div class="col-md-4"><label class="form-label" for="estado">Estado</label>
+      <input class="form-control" id="estado" name="estado"></div>
+    <div class="col-md-8"><label class="form-label" for="cidade">Cidade</label>
+      <div class="input-group">
+        <input class="form-control" id="cidade" name="cidade">
+        <button type="button" class="btn btn-outline-secondary" id="buscar">Buscar coordenadas</button>
+      </div></div>
+    <div class="col-md-4"><label class="form-label" for="latitude">Latitude</label>
+      <input class="form-control" id="latitude" name="latitude" type="number" step="any" min="-90" max="90"></div>
+    <div class="col-md-4"><label class="form-label" for="longitude">Longitude</label>
+      <input class="form-control" id="longitude" name="longitude" type="number" step="any" min="-180" max="180"></div>
+    <div class="col-md-4"><label class="form-label" for="altitude">Altitude (m)</label>
+      <input class="form-control" id="altitude" name="altitude" type="number" step="any"></div>
+  </div>
+  <div id="msg" class="small mt-2 text-danger" role="alert"></div>
+  <button class="btn btn-success mt-3 align-self-start">Salvar fazenda</button>
+</form>
+
+<h2 class="h5">Minhas fazendas</h2>
+{% if fazendas %}
+<div class="table-responsive"><table class="table table-sm bg-white">
+  <thead><tr><th>Nome</th><th>Proprietário</th><th>Cidade/UF</th><th>Lat</th><th>Lon</th><th>Alt (m)</th></tr></thead>
+  <tbody>{% for f in fazendas %}
+    <tr><td>{{ f.nome }}</td><td>{{ f.proprietario or "" }}</td><td>{{ f.cidade or "" }}{% if f.estado %}/{{ f.estado }}{% endif %}</td>
+        <td>{{ f.latitude if f.latitude is not none else "" }}</td><td>{{ f.longitude if f.longitude is not none else "" }}</td>
+        <td>{{ f.altitude if f.altitude is not none else "" }}</td></tr>
+  {% endfor %}</tbody>
+</table></div>
+{% else %}<p class="text-muted">Nenhuma fazenda cadastrada ainda.</p>{% endif %}
+
+<script>
+document.getElementById("buscar").addEventListener("click", async () => {
+  const msg = document.getElementById("msg"); msg.textContent = "";
+  const cidade = document.getElementById("cidade").value.trim();
+  if (!cidade) { msg.textContent = "Informe a cidade."; return; }
+  const r = await fetch("/api/coordenadas?cidade=" + encodeURIComponent(cidade));
+  const d = await r.json();
+  if (!r.ok) { msg.textContent = d.erro || "Erro na busca."; return; }
+  for (const k of ["latitude", "longitude", "altitude"]) if (d[k] != null) document.getElementById(k).value = d[k];
+  if (d.estado && !document.getElementById("estado").value) document.getElementById("estado").value = d.estado;
+});
+</script>
+{% endblock %}

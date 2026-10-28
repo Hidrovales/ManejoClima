@@ -1,0 +1,37 @@
+{% extends "base.html" %}
+{% block conteudo %}
+<h1 class="h4">Cadastro de equipamento</h1>
+{% if not fazendas %}
+<div class="alert alert-warning">Cadastre uma <a href="/">fazenda</a> antes de cadastrar equipamentos.</div>
+{% else %}
+<form method="post" action="/equipamentos" class="card card-body shadow-sm mb-4">
+  <div class="row g-3">
+    <div class="col-md-6"><label class="form-label" for="fazenda_id">Fazenda</label>
+      <select class="form-select" id="fazenda_id" name="fazenda_id" required>
+        {% for f in fazendas %}<option value="{{ f.id }}">{{ f.nome }}</option>{% endfor %}
+      </select></div>
+    <div class="col-md-6"><label class="form-label" for="tipo">Tipo</label>
+      <select class="form-select" id="tipo" name="tipo" required>
+        {% for t in tipos %}<option>{{ t }}</option>{% endfor %}
+      </select></div>
+    <div class="col-md-6"><label class="form-label" for="nome">Nome do equipamento</label>
+      <input class="form-control" id="nome" name="nome" required></div>
+    <div class="col-md-3"><label class="form-label" for="vazao">Vazão (m³/h)</label>
+      <input class="form-control" id="vazao" name="vazao" type="number" step="any" min="0.0001" required></div>
+    <div class="col-md-3"><label class="form-label" for="eficiencia">Eficiência (%)</label>
+      <input class="form-control" id="eficiencia" name="eficiencia" type="number" step="any" min="0.01" max="100" required></div>
+  </div>
+  <button class="btn btn-success mt-3 align-self-start">Salvar equipamento</button>
+</form>
+{% endif %}
+
+<h2 class="h5">Meus equipamentos</h2>
+{% if equipamentos %}
+<div class="table-responsive"><table class="table table-sm bg-white">
+  <thead><tr><th>Nome</th><th>Tipo</th><th>Fazenda</th><th>Vazão (m³/h)</th><th>Eficiência (%)</th></tr></thead>
+  <tbody>{% for e in equipamentos %}
+    <tr><td>{{ e.nome }}</td><td>{{ e.tipo }}</td><td>{{ e.fazenda.nome }}</td><td>{{ e.vazao }}</td><td>{{ e.eficiencia }}</td></tr>
+  {% endfor %}</tbody>
+</table></div>
+{% else %}<p class="text-muted">Nenhum equipamento cadastrado ainda.</p>{% endif %}
+{% endblock %}

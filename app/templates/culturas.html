@@ -1,0 +1,59 @@
+{% extends "base.html" %}
+{% block conteudo %}
+<h1 class="h4">Cadastro de cultura</h1>
+{% if not fazendas %}
+<div class="alert alert-warning">Cadastre uma <a href="/">fazenda</a> antes de cadastrar culturas.</div>
+{% else %}
+<form method="post" action="/culturas" class="card card-body shadow-sm mb-4">
+  <div class="row g-3">
+    <div class="col-md-4"><label class="form-label" for="fazenda_id">Fazenda</label>
+      <select class="form-select" id="fazenda_id" name="fazenda_id" required>
+        {% for f in fazendas %}<option value="{{ f.id }}">{{ f.nome }}</option>{% endfor %}
+      </select></div>
+    <div class="col-md-5"><label class="form-label" for="nome">Nome</label>
+      <input class="form-control" id="nome" name="nome" required></div>
+    <div class="col-md-3"><label class="form-label" for="p">Fator de disponibilidade hídrica (p)</label>
+      <input class="form-control" id="p" name="p" type="number" step="any" min="0.01" max="0.99" required></div>
+  </div>
+
+  <div class="table-responsive mt-3"><table class="table table-bordered table-sm align-middle mb-2">
+    <thead><tr class="text-center">
+      <th class="text-start">Fases</th><th>Duração (dias)</th><th>Kc</th><th>Profundidade das raízes (m)</th>
+      <th>Área sombreada (%)<div class="small fw-normal text-muted">não usada no cálculo</div></th><th>Kc constante</th>
+    </tr></thead>
+    <tbody>
+    {% for k, rotulo in fases.items() %}
+      <tr><th class="text-start fw-normal">{{ rotulo }}</th>
+        <td><input class="form-control" name="dur_{{ k }}" type="number" min="1" step="1" required aria-label="Duração {{ rotulo }}"></td>
+        {% if k == "desenvolvimento" %}
+        <td class="text-center text-muted small">interpolado</td><td class="text-center text-muted small">interpolado</td>
+        {% else %}
+        <td><input class="form-control" name="kc_{{ k }}" type="number" min="0.01" step="any" required aria-label="Kc {{ rotulo }}"></td>
+        <td><input class="form-control" name="z_{{ k }}" type="number" min="0.01" step="any" required aria-label="Raízes {{ rotulo }}"></td>
+        {% endif %}
+        <td><input class="form-control" name="area_{{ k }}" type="number" min="0" max="100" step="any" aria-label="Área sombreada {{ rotulo }}"></td>
+        <td class="text-center"><input class="form-check-input" type="checkbox" name="const_{{ k }}" aria-label="Kc constante {{ rotulo }}"
+            {% if k in ("inicial", "media") %}checked{% endif %}></td></tr>
+    {% endfor %}
+    </tbody>
+  </table></div>
+  <p class="small text-muted mb-0">Inicial e Média são constantes e o Desenvolvimento é interpolado entre elas.
+    Na fase Final, marque "constante" para manter o valor da fase, ou deixe desmarcado para interpolar do valor da Média até o da Final.
+    A marcação vale para o Kc e para a profundidade das raízes.</p>
+  <button class="btn btn-success mt-3 align-self-start">Salvar cultura</button>
+</form>
+{% endif %}
+
+<h2 class="h5">Minhas culturas</h2>
+{% if culturas %}
+<div class="table-responsive"><table class="table table-sm bg-white">
+  <thead><tr><th>Cultura</th><th>Fazenda</th><th>p</th><th>Dias (ini/des/méd/fin)</th><th>Kc (ini/méd/fin)</th><th>Raízes m (ini/méd/fin)</th></tr></thead>
+  <tbody>{% for c in culturas %}
+    <tr><td>{{ c.nome }}</td><td>{{ c.fazenda.nome }}</td><td>{{ c.p }}</td>
+        <td>{{ c.fases | map(attribute="duracao") | join("/") }}</td>
+        <td>{{ c.fases | map(attribute="kc") | select("ne", none) | join("/") }}</td>
+        <td>{{ c.fases | map(attribute="z") | select("ne", none) | join("/") }}</td></tr>
+  {% endfor %}</tbody>
+</table></div>
+{% else %}<p class="text-muted">Nenhuma cultura cadastrada ainda.</p>{% endif %}
+{% endblock %}
