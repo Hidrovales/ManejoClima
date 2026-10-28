@@ -1,0 +1,18 @@
+{% extends "base.html" %}
+{% block conteudo %}
+<h1 class="h4">Rodar manejo</h1>
+<p class="text-muted small">Cada clique busca os dados de hoje na Open-Meteo, soma o dia à série da fazenda e recalcula o balanço da parcela.</p>
+{% if parcelas %}
+<div class="table-responsive"><table class="table table-sm bg-white align-middle">
+  <thead><tr><th>Parcela</th><th>Fazenda</th><th>Cultura</th><th>Manejo</th><th>Dias calculados</th><th>Último dia</th><th></th></tr></thead>
+  <tbody>{% for p in parcelas %}
+    <tr><td>{{ p.nome }}</td><td>{{ p.fazenda.nome }}</td><td>{{ p.cultura.nome }}</td>
+        <td>{{ p.manejo_inicio.strftime("%d/%m/%Y") }} a {{ p.manejo_fim.strftime("%d/%m/%Y") }}</td>
+        <td>{{ p.resultados | length }}</td>
+        <td>{{ p.resultados[-1].data.strftime("%d/%m/%Y") if p.resultados else "—" }}</td>
+        <td class="d-flex gap-2"><form method="post" action="/manejo/{{ p.id }}" class="m-0"><button class="btn btn-sm btn-success">Rodar manejo</button></form>
+            <a class="btn btn-sm btn-outline-secondary" href="/manejo/{{ p.id }}">Gráfico</a></td></tr>
+  {% endfor %}</tbody>
+</table></div>
+{% else %}<p class="text-muted">Cadastre uma <a href="/parcelas">parcela</a> para rodar o manejo.</p>{% endif %}
+{% endblock %}

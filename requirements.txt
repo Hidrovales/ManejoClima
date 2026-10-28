@@ -1,0 +1,13 @@
+fastapi
+uvicorn
+sqlalchemy>=2.0
+psycopg[binary]
+jinja2
+python-multipart
+itsdangerous
+bcrypt
+requests
+pandas
+httpx
+pytest
+python-dotenv

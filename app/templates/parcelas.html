@@ -1,0 +1,92 @@
+{% extends "base.html" %}
+{% block conteudo %}
+<h1 class="h4">Cadastro de parcela</h1>
+{% if not (culturas and solos and equipamentos) %}
+<div class="alert alert-warning">Para cadastrar uma parcela, cadastre antes ao menos uma
+  <a href="/culturas">cultura</a>, um <a href="/solos">solo</a> e um <a href="/equipamentos">equipamento</a>.</div>
+{% else %}
+<form method="post" action="/parcelas" class="card card-body shadow-sm mb-4">
+  <div class="row g-3">
+    <div class="col-md-4"><label class="form-label" for="fazenda_id">Fazenda</label>
+      <select class="form-select" id="fazenda_id" name="fazenda_id" required>
+        {% for f in fazendas %}<option value="{{ f.id }}">{{ f.nome }}</option>{% endfor %}
+      </select></div>
+    <div class="col-md-4"><label class="form-label" for="nome">Nome da parcela</label>
+      <input class="form-control" id="nome" name="nome" required></div>
+    <div class="col-md-2"><label class="form-label" for="area_ha">Área (ha)</label>
+      <input class="form-control" id="area_ha" name="area_ha" type="number" step="any" min="0.01" required></div>
+    <div class="col-md-2"><label class="form-label" for="data_plantio">Data de plantio</label>
+      <input class="form-control" id="data_plantio" name="data_plantio" type="date" required></div>
+  </div>
+
+  <h2 class="h6 mt-4">Cultura</h2>
+  <div class="row g-3">
+    <div class="col-md-4"><label class="form-label" for="cultura_id">Cultura</label>
+      <select class="form-select" id="cultura_id" name="cultura_id" required>
+        {% for c in culturas %}<option value="{{ c.id }}" data-fazenda="{{ c.fazenda_id }}">{{ c.nome }}</option>{% endfor %}
+      </select></div>
+    <div class="col-md-4"><label class="form-label" for="fase">Fase a manejar</label>
+      <select class="form-select" id="fase" name="fase" required>
+        {% for k, v in fases.items() %}<option value="{{ k }}">{{ v }}</option>{% endfor %}
+      </select></div>
+    <div class="col-md-4"><label class="form-label" for="data_inicio_fase">Data inicial da fase</label>
+      <input class="form-control" id="data_inicio_fase" name="data_inicio_fase" type="date" required></div>
+  </div>
+
+  <h2 class="h6 mt-4">Solo</h2>
+  <div class="row g-3">
+    <div class="col-md-6"><label class="form-label" for="solo_id">Solo</label>
+      <select class="form-select" id="solo_id" name="solo_id" required>
+        {% for s in solos %}<option value="{{ s.id }}" data-fazenda="{{ s.fazenda_id }}">{{ s.nome }}</option>{% endfor %}
+      </select></div>
+    <div class="col-md-6"><label class="form-label" for="umidade_inicial">Umidade do solo no início do manejo, θ (m³/m³)</label>
+      <input class="form-control" id="umidade_inicial" name="umidade_inicial" type="number" step="any" min="0.01" max="1" required></div>
+  </div>
+
+  <h2 class="h6 mt-4">Equipamento</h2>
+  <div class="row g-3">
+    <div class="col-md-6"><label class="form-label" for="equipamento_id">Equipamento</label>
+      <select class="form-select" id="equipamento_id" name="equipamento_id" required>
+        {% for e in equipamentos %}<option value="{{ e.id }}" data-fazenda="{{ e.fazenda_id }}">{{ e.nome }} ({{ e.tipo }})</option>{% endfor %}
+      </select></div>
+    <div class="col-md-3"><label class="form-label" for="espacamento_x">Espaçamento X (m)</label>
+      <input class="form-control" id="espacamento_x" name="espacamento_x" type="number" step="any" min="0.01" required></div>
+    <div class="col-md-3"><label class="form-label" for="espacamento_y">Espaçamento Y (m)</label>
+      <input class="form-control" id="espacamento_y" name="espacamento_y" type="number" step="any" min="0.01" required></div>
+  </div>
+
+  <h2 class="h6 mt-4">Configuração do manejo</h2>
+  <div class="row g-3">
+    <div class="col-md-6"><label class="form-label" for="manejo_inicio">Data inicial</label>
+      <input class="form-control" id="manejo_inicio" name="manejo_inicio" type="date" required></div>
+    <div class="col-md-6"><label class="form-label" for="manejo_fim">Data final</label>
+      <input class="form-control" id="manejo_fim" name="manejo_fim" type="date" required></div>
+  </div>
+  <button class="btn btn-success mt-4 align-self-start">Salvar parcela</button>
+</form>
+<script>
+// mostra só cultura/solo/equipamento da fazenda escolhida (o servidor valida de novo)
+const fz = document.getElementById("fazenda_id");
+function filtra() {
+  for (const id of ["cultura_id", "solo_id", "equipamento_id"]) {
+    const sel = document.getElementById(id);
+    for (const o of sel.options) { const ok = o.dataset.fazenda === fz.value; o.hidden = o.disabled = !ok; }
+    if (sel.selectedOptions[0]?.disabled) sel.value = [...sel.options].find(o => !o.disabled)?.value ?? "";
+  }
+}
+fz.addEventListener("change", filtra); filtra();
+</script>
+{% endif %}
+
+<h2 class="h5">Minhas parcelas</h2>
+{% if parcelas %}
+<div class="table-responsive"><table class="table table-sm bg-white">
+  <thead><tr><th>Parcela</th><th>Fazenda</th><th>Área (ha)</th><th>Plantio</th><th>Cultura / fase</th><th>Solo</th><th>Equipamento</th><th>Manejo</th></tr></thead>
+  <tbody>{% for p in parcelas %}
+    <tr><td>{{ p.nome }}</td><td>{{ p.fazenda.nome }}</td><td>{{ p.area_ha }}</td><td>{{ p.data_plantio.strftime("%d/%m/%Y") }}</td>
+        <td>{{ p.cultura.nome }} / {{ fases[p.fase] }}</td><td>{{ p.solo.nome }}</td><td>{{ p.equipamento.nome }}</td>
+        <td>{{ p.manejo_inicio.strftime("%d/%m/%Y") }} a {{ p.manejo_fim.strftime("%d/%m/%Y") }}</td></tr>
+  {% endfor %}</tbody>
+</table></div>
+{% else %}<p class="text-muted">Nenhuma parcela cadastrada ainda.</p>{% endif %}
+{% endblock %}

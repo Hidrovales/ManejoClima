@@ -1,0 +1,69 @@
+{% extends "base.html" %}
+{% block conteudo %}
+<h1 class="h4">Cadastro de solo</h1>
+{% if not fazendas %}
+<div class="alert alert-warning">Cadastre uma <a href="/">fazenda</a> antes de cadastrar solos.</div>
+{% else %}
+<form method="post" action="/solos" class="card card-body shadow-sm mb-4">
+  <div class="row g-3">
+    <div class="col-md-6"><label class="form-label" for="fazenda_id">Fazenda</label>
+      <select class="form-select" id="fazenda_id" name="fazenda_id" required>
+        {% for f in fazendas %}<option value="{{ f.id }}">{{ f.nome }}</option>{% endfor %}
+      </select></div>
+    <div class="col-md-6"><label class="form-label" for="nome">Nome do solo</label>
+      <input class="form-control" id="nome" name="nome" required></div>
+  </div>
+
+  <h2 class="h6 mt-4">Camadas <span class="fw-normal text-muted small">(da superfície para baixo)</span></h2>
+  <div id="camadas"></div>
+  <div class="text-center mt-2">
+    <button type="button" class="btn btn-outline-success" id="add-camada">+ Adicionar camada</button>
+  </div>
+  <button class="btn btn-success mt-3 align-self-start">Salvar solo</button>
+</form>
+
+<template id="modelo-camada">
+  <div class="row g-3 camada mb-2">
+    <div class="col-12">
+      <span class="fw-semibold rotulo"></span>
+      <button type="button" class="btn btn-sm btn-link text-danger remover">Remover</button>
+    </div>
+    <div class="col-md-4"><label class="form-label w-100">Espessura (m)
+      <input class="form-control" name="espessura" type="number" step="any" min="0.01" required></label></div>
+    <div class="col-md-4"><label class="form-label w-100">Capacidade de campo θ<sub>fc</sub> (m³/m³)
+      <input class="form-control" name="theta_fc" type="number" step="any" min="0.01" max="1" required></label></div>
+    <div class="col-md-4"><label class="form-label w-100">Ponto de murcha θ<sub>wp</sub> (m³/m³)
+      <input class="form-control" name="theta_wp" type="number" step="any" min="0.01" max="1" required></label></div>
+  </div>
+</template>
+<script>
+const lista = document.getElementById("camadas"), modelo = document.getElementById("modelo-camada");
+function numera() {
+  lista.querySelectorAll(".camada").forEach((c, i) => {
+    c.querySelector(".rotulo").textContent = "Camada " + (i + 1);
+    c.querySelector(".remover").classList.toggle("d-none", i === 0);  // a primeira camada é obrigatória
+  });
+}
+function adiciona(foco) {
+  lista.append(modelo.content.cloneNode(true));
+  numera();
+  if (foco) lista.lastElementChild.querySelector("input").focus();
+}
+document.getElementById("add-camada").addEventListener("click", () => adiciona(true));
+lista.addEventListener("click", e => {
+  if (e.target.classList.contains("remover")) { e.target.closest(".camada").remove(); numera(); }
+});
+adiciona(false);
+</script>
+{% endif %}
+
+<h2 class="h5">Meus solos</h2>
+{% if solos %}
+<div class="table-responsive"><table class="table table-sm bg-white">
+  <thead><tr><th>Solo</th><th>Fazenda</th><th>Camada</th><th>Espessura (m)</th><th>θ<sub>fc</sub></th><th>θ<sub>wp</sub></th></tr></thead>
+  <tbody>{% for s in solos %}{% for c in s.camadas %}
+    <tr><td>{{ s.nome }}</td><td>{{ s.fazenda.nome }}</td><td>{{ loop.index }}</td><td>{{ c.espessura }}</td><td>{{ c.theta_fc }}</td><td>{{ c.theta_wp }}</td></tr>
+  {% endfor %}{% endfor %}</tbody>
+</table></div>
+{% else %}<p class="text-muted">Nenhum solo cadastrado ainda.</p>{% endif %}
+{% endblock %}
