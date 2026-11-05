@@ -244,10 +244,10 @@ def test_lancamentos(c, monkeypatch):
                               "manejo_fim": (hoje + datetime.timedelta(days=30)).isoformat()})
     lanc = {"parcela_id": "1", "data": dia(2), "tempo": "30"}
     r = c.post("/lancamentos", data=lanc)
-    assert "Lançamento salvo" in r.text and "Rode o manejo" in r.text and "35.42" in r.text  # 12 m³/h x 85% sobre 12x12 m = 70,8 mm/h; 30 min = 35,4 mm
+    assert "Lançamento salvo" in r.text and "Rode o manejo" in r.text and "30 min" in r.text  # 12 m³/h x 85% sobre 12x12 m = 70,8 mm/h; 30 min = 35,4 mm
     assert resultados() == {}  # o manejo ainda não rodou: não há balanço para atualizar
     r = c.post("/lancamentos", data={**lanc, "tempo": "", "lamina": "7"})  # mesma data: substitui
-    assert r.text.count('action="/lancamentos/') == 1 and "7.00" in r.text
+    assert r.text.count('action="/lancamentos/') == 1 and "7 mm" in r.text
     assert "dentro do período" in c.post("/lancamentos", data={**lanc, "data": dia(9)}).text
     assert "dentro do período" in c.post("/lancamentos", data={**lanc, "data": (hoje + datetime.timedelta(days=1)).isoformat()}).text
     assert "entre 0 e 300" in c.post("/lancamentos", data={**lanc, "data": dia(1), "tempo": "", "lamina": "999"}).text

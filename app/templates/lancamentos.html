@@ -36,10 +36,10 @@
 {% for p in parcelas %}{% for l in p.lancamentos %}{% set _ = linhas.append((p, l)) %}{% endfor %}{% endfor %}
 {% if linhas %}
 <div class="table-responsive"><table class="table table-sm bg-white align-middle">
-  <thead><tr><th>Parcela</th><th>Data</th><th>Informado</th><th>Lâmina no solo (mm)</th><th></th></tr></thead>
+  <thead><tr><th>Parcela</th><th>Data</th><th>Informado</th><th></th></tr></thead>
   <tbody>{% for p, l in linhas | sort(attribute="1.data", reverse=true) %}
     <tr><td>{{ p.nome }}</td><td>{{ l.data.strftime("%d/%m/%Y") }}</td>
-        <td>{{ "%g"|format(l.valor) }} {{ "min" if l.tipo == "tempo" else "mm" }}</td><td>{{ "%.2f"|format(l.lamina_mm) }}</td>
+        <td>{{ "%g"|format(l.valor) }} {{ "min" if l.tipo == "tempo" else "mm" }}</td>
         <td><form method="post" action="/lancamentos/{{ l.id }}/excluir" class="m-0"><button class="btn btn-sm btn-outline-danger">Excluir</button></form></td></tr>
   {% endfor %}</tbody>
 </table></div>
