@@ -2,7 +2,7 @@
 {% block conteudo %}
 <h1 class="h4">Cadastro de solo</h1>
 {% if not fazendas %}
-<div class="alert alert-warning">Cadastre uma <a href="/">fazenda</a> antes de cadastrar solos.</div>
+<div class="alert alert-warning">Cadastre uma <a href="/fazendas">fazenda</a> antes de cadastrar solos.</div>
 {% else %}
 <form method="post" action="/solos" class="card card-body shadow-sm mb-4">
   <div class="row g-3">
