@@ -2,6 +2,7 @@
 {% block conteudo %}
 <h1 class="h4">Rodar manejo</h1>
 <p class="text-muted small">Cada clique busca os dados de hoje na Open-Meteo, soma o dia à série da fazenda e recalcula o balanço da parcela.</p>
+{% if aviso %}<div class="alert alert-warning">{{ aviso }}</div>{% endif %}
 {% if parcelas %}
 <div class="table-responsive"><table class="table table-sm bg-white align-middle">
   <thead><tr><th>Parcela</th><th>Fazenda</th><th>Cultura</th><th>Manejo</th><th>Dias calculados</th><th>Último dia</th><th></th></tr></thead>
@@ -14,5 +15,5 @@
             <a class="btn btn-sm btn-outline-secondary" href="/manejo/{{ p.id }}">Gráfico</a></td></tr>
   {% endfor %}</tbody>
 </table></div>
-{% else %}<p class="text-muted">Cadastre uma <a href="/parcelas">parcela</a> para rodar o manejo.</p>{% endif %}
+{% else %}<p class="text-muted">Nenhuma parcela ainda. Abra o menu (☰) e cadastre a fazenda, o solo, a cultura, o equipamento e a parcela.</p>{% endif %}
 {% endblock %}

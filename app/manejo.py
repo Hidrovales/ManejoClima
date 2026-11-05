@@ -39,7 +39,6 @@ def rodar_manejo(db: Session, parcela: Parcela) -> str:
     # (a Open-Meteo devolve no máximo 92 dias passados; a data do servidor pode diferir 1 dia da da fazenda, por isso o +1)
     passados = max(0, min(92, (datetime.date.today() - parcela.manejo_inicio).days + 1))
     dias = buscar_periodo(f.latitude, f.longitude, f.altitude, passados)
-    hoje = dias[-1]["data"]
     for d in dias:
         if math.isnan(d["eto"]):  # dia com dados incompletos na API: fica de fora (o aviso no fim informa)
             continue
@@ -52,7 +51,16 @@ def rodar_manejo(db: Session, parcela: Parcela) -> str:
         else:
             db.add(SerieDiaria(fazenda_id=f.id, data=d["data"], eto=d["eto"], precipitacao=chuva))
     db.flush()
+    return recalcular_balanco(db, parcela)
+
+
+def recalcular_balanco(db: Session, parcela: Parcela) -> str:
+    """Refaz o balanço da parcela com a série já salva e os lançamentos atuais, sem consultar a Open-Meteo."""
+    f, cult = parcela.fazenda, parcela.cultura
     serie = {s.data: s for s in db.scalars(select(SerieDiaria).where(SerieDiaria.fazenda_id == f.id))}
+    if not serie:
+        raise ValueError("Rode o manejo ao menos uma vez para buscar os dados meteorológicos.")
+    hoje = max(serie)  # último dia registrado
 
     fs = {x.fase: x for x in cult.fases}
     periodo = {k: fs[k].duracao for k in FASES_ORDEM}

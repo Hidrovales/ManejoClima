@@ -112,7 +112,7 @@ def Ks(Din, ADT, AFA):
   if Din < AFA:
     return 1
   else:
-    return (ADT - Din) / (ADT - AFA)
+    return max(0, (ADT - Din) / (ADT - AFA))  # sem irrigação o déficit pode chegar ao limite: ET para em vez de ficar negativa
 
 def Etca(Eto, Kc, Ks):
   """
@@ -186,8 +186,8 @@ def simular(datas, eto, P, camadas, p, periodo, z_etapas, forma_z, kc_etapas, fo
   :parâmetro camadas: lista de (espessura [m], theta_fc, theta_wp) do solo; ver medias_na_raiz().
   :parâmetro data_in: início do ciclo da cultura (referência da interpolação de Kc e Zr).
   :parâmetro umidade_inicial: umidade do solo no primeiro dia [m^3 m^-3]; define o déficit inicial.
-  :parâmetro irrigacoes: dicionário {data: lâmina aplicada [mm]}. Nos dias que estão nele vale o valor informado;
-                         nos demais vale a irrigação recomendada pelo balanço.
+  :parâmetro irrigacoes: dicionário {data: lâmina aplicada [mm]}. Com ele, só há irrigação nos dias que estão nele
+                         (os demais dias contam como sem irrigação). Com None, o balanço irriga sozinho (recomendada).
   """
   if p >= 1:
     raise ValueError("O fator p deve ser menor que 1.")
@@ -209,8 +209,8 @@ def simular(datas, eto, P, camadas, p, periodo, z_etapas, forma_z, kc_etapas, fo
     ks = Ks(din, adt, afa)
     etca = Etca(eto[j], kc, ks)
     recomendada = Irrigacao(din, afa, etca)
-    lancada = bool(irrigacoes) and d in irrigacoes
-    I = irrigacoes[d] if lancada else recomendada
+    lancada = irrigacoes is not None and d in irrigacoes
+    I = irrigacoes[d] if lancada else (recomendada if irrigacoes is None else 0.0)
     dp = DP(P[j], I, etca, dfim)
     dfim = Dfim(dfim, P[j], I, etca, dp)
     FC = Zr * theta_fc * 1000

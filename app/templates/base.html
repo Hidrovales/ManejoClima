@@ -8,23 +8,46 @@
 </head>
 <body class="bg-light">
 <nav class="navbar bg-success navbar-dark mb-4">
-  <div class="container">
-    <a class="navbar-brand" href="/">🌱 ManejoClima</a>
+  <div class="container-fluid gap-2">
     {% if user %}
-    <div class="navbar-nav flex-row gap-3 me-auto ms-3">
-      <a class="nav-link" href="/">Fazendas</a><a class="nav-link" href="/solos">Solos</a><a class="nav-link" href="/culturas">Culturas</a><a class="nav-link" href="/equipamentos">Equipamentos</a><a class="nav-link" href="/parcelas">Parcelas</a><a class="nav-link" href="/manejo">Manejo</a><a class="nav-link" href="/lancamentos">Lançamentos</a>
+    <button class="navbar-toggler d-flex flex-column align-items-center py-1 px-2" type="button"
+            data-bs-toggle="offcanvas" data-bs-target="#menu" aria-controls="menu">
+      <span class="navbar-toggler-icon"></span><span class="small text-white">Cadastro</span></button>
+    {% endif %}
+    <a class="navbar-brand me-2" href="/">🌱 Manejo Clima</a>
+    {% if user %}
+    <div class="navbar-nav flex-row gap-3 me-auto">
+      <a class="nav-link" href="/">Manejo</a><a class="nav-link" href="/lancamentos">Lançamentos</a>
     </div>
     <form method="post" action="/logout" class="d-flex align-items-center gap-2 m-0">
-      <span class="text-white small">{{ user.email }}</span>
+      <span class="text-white small d-none d-md-inline">{{ user.email }}</span>
       <button class="btn btn-sm btn-outline-light">Sair</button>
     </form>
     {% endif %}
   </div>
 </nav>
+{% if user %}
+<div class="offcanvas offcanvas-start" tabindex="-1" id="menu" aria-labelledby="menu-titulo">
+  <div class="offcanvas-header">
+    <h2 class="offcanvas-title h5" id="menu-titulo">Cadastro</h2>
+    <button type="button" class="btn-close" data-bs-dismiss="offcanvas" aria-label="Fechar menu"></button>
+  </div>
+  <div class="offcanvas-body p-0">
+    <div class="list-group list-group-flush">
+      <a class="list-group-item list-group-item-action" href="/fazendas">Fazendas</a>
+      <a class="list-group-item list-group-item-action" href="/solos">Solos</a>
+      <a class="list-group-item list-group-item-action" href="/culturas">Culturas</a>
+      <a class="list-group-item list-group-item-action" href="/equipamentos">Equipamentos</a>
+      <a class="list-group-item list-group-item-action" href="/parcelas">Parcelas</a>
+    </div>
+  </div>
+</div>
+{% endif %}
 <main class="container" style="max-width: 760px">
   {% if erro %}<div class="alert alert-danger">{{ erro }}</div>{% endif %}
   {% if msg %}<div class="alert alert-success">{{ msg }}</div>{% endif %}
   {% block conteudo %}{% endblock %}
 </main>
+<script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js"></script>
 </body>
 </html>

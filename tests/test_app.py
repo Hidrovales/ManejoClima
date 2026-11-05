@@ -28,10 +28,10 @@ def test_home_exige_login(c):
 def test_cadastro_login_e_fazenda_isolada(c):
     assert cadastra(c).status_code == 303
     assert c.post("/fazendas", data={"nome": "Faz A", "latitude": "-10.5"}).status_code == 303
-    assert "Faz A" in c.get("/").text
+    assert "Faz A" in c.get("/fazendas").text
     c.post("/logout")
     cadastra(c, "b@x.com")
-    assert "Faz A" not in c.get("/").text  # outro usuário não vê
+    assert "Faz A" not in c.get("/fazendas").text  # outro usuário não vê
 
 
 def test_validacoes(c):
@@ -159,8 +159,15 @@ def test_simular_conta_na_mao():
     assert x["irrigacao"] == 0 and x["lancada"] and x["irrigacao_recomendada"] == pytest.approx(b["irrigacao"])
     assert x["dfim"] == pytest.approx(20 + x["etca"])
     assert not a["lancada"] and a["irrigacao_recomendada"] == a["irrigacao"]
+    y = _simula(0.25, {})  # com lançamentos (nenhum): dia sem lançamento = sem irrigação; a recomendada fica registrada
+    assert y["irrigacao"] == 0 and not y["lancada"] and y["irrigacao_recomendada"] == pytest.approx(b["irrigacao"])
     with pytest.raises(ValueError, match="umidade inicial"):
         _simula(0.5)  # acima da capacidade de campo
+
+
+def test_ks_nao_fica_negativo():
+    from calculo.balanco import Ks
+    assert Ks(10, 30, 16.5) == 1 and Ks(25, 30, 16.5) == pytest.approx(5 / 13.5) and Ks(35, 30, 16.5) == 0
 
 
 def test_medias_na_raiz():
@@ -198,12 +205,15 @@ def test_rodar_manejo(c, monkeypatch):
     c.post("/parcelas", data=parcela("P1", hoje))
     c.post("/parcelas", data=parcela("P2", hoje - datetime.timedelta(days=5)))
     c.post("/parcelas", data=parcela("P3", hoje + datetime.timedelta(days=3)))
-    assert "1 dia(s)" in c.post("/manejo/1").text
+    r = c.post("/manejo/1")
+    assert "1 dia(s)" in r.text and "podem ser parciais" in r.text
+    assert "offcanvas" in c.get("/").text and "Solos" in c.get("/").text  # tela principal é o manejo, com o menu lateral
     # dias que ninguém registrou (o caso de rodar de novo dias depois) são recuperados na mesma consulta
     r = c.post("/manejo/2")
-    assert "6 dia(s)" in r.text and "Atenção" not in r.text
+    assert "6 dia(s)" in r.text and "faltam dados" not in r.text
     assert chamadas[-1] == 6  # os 5 dias do início do manejo, hoje e 1 de folga
-    assert "Ainda não há dados" in c.post("/manejo/3").text  # o manejo ainda não começou
+    r = c.post("/manejo/3")  # o manejo ainda não começou
+    assert "Ainda não há dados" in r.text and "podem ser parciais" not in r.text
     g = c.get("/manejo/1")
     assert g.status_code == 200 and "Umidade do solo" in g.text and '"ua"' in g.text
     assert "ainda não tem resultados" in c.get("/manejo/3").text
@@ -218,30 +228,40 @@ def test_lancamentos(c, monkeypatch):
 
     from app.db import SessionLocal
     from app.models import ResultadoDia
-    _falsa_api(monkeypatch, [])
+    chamadas = []
+    _falsa_api(monkeypatch, chamadas)
     hoje = datetime.date.today()
 
     def dia(k):
         return (hoje - datetime.timedelta(days=k)).isoformat()
 
+    def resultados():
+        with SessionLocal() as db:
+            return {x.data.isoformat(): x.valores for x in db.scalars(select(ResultadoDia))}
+
     prepara_parcela(c)
     c.post("/parcelas", data={**PARC, "data_plantio": dia(5), "data_inicio_fase": dia(5), "manejo_inicio": dia(5),
                               "manejo_fim": (hoje + datetime.timedelta(days=30)).isoformat()})
-    lanc = {"parcela_id": "1", "data": dia(2), "tipo": "tempo", "valor": "30"}
+    lanc = {"parcela_id": "1", "data": dia(2), "tempo": "30"}
     r = c.post("/lancamentos", data=lanc)
-    assert "Lançamento salvo" in r.text and "35.42" in r.text  # 12 m³/h x 85% sobre 12x12 m = 70,8 mm/h; 30 min = 35,4 mm
-    r = c.post("/lancamentos", data={**lanc, "tipo": "lamina", "valor": "7"})  # mesma data: substitui
+    assert "Lançamento salvo" in r.text and "Rode o manejo" in r.text and "35.42" in r.text  # 12 m³/h x 85% sobre 12x12 m = 70,8 mm/h; 30 min = 35,4 mm
+    assert resultados() == {}  # o manejo ainda não rodou: não há balanço para atualizar
+    r = c.post("/lancamentos", data={**lanc, "tempo": "", "lamina": "7"})  # mesma data: substitui
     assert r.text.count('action="/lancamentos/') == 1 and "7.00" in r.text
     assert "dentro do período" in c.post("/lancamentos", data={**lanc, "data": dia(9)}).text
     assert "dentro do período" in c.post("/lancamentos", data={**lanc, "data": (hoje + datetime.timedelta(days=1)).isoformat()}).text
-    assert "entre 0 e 300" in c.post("/lancamentos", data={**lanc, "data": dia(1), "tipo": "lamina", "valor": "999"}).text
-    assert "tempo ou por lâmina" in c.post("/lancamentos", data={**lanc, "tipo": "x"}).text
+    assert "entre 0 e 300" in c.post("/lancamentos", data={**lanc, "data": dia(1), "tempo": "", "lamina": "999"}).text
+    assert "apenas um dos dois" in c.post("/lancamentos", data={**lanc, "lamina": "5"}).text
+    assert "dd/mm/aaaa" in c.post("/lancamentos", data={**lanc, "data": "31/02/2026"}).text
 
-    assert "dia(s)" in c.post("/manejo/1").text  # o balanço usa o lançado nos dias lançados e o recomendado nos demais
-    with SessionLocal() as db:
-        v = {x.data.isoformat(): x.valores for x in db.scalars(select(ResultadoDia))}
+    assert "dia(s)" in c.post("/manejo/1").text and len(chamadas) == 1
+    v = resultados()
     assert v[dia(2)]["lancada"] and v[dia(2)]["irrigacao"] == pytest.approx(7)
-    assert not v[dia(3)]["lancada"] and v[dia(3)]["irrigacao"] == v[dia(3)]["irrigacao_recomendada"]
+    assert not v[dia(3)]["lancada"] and v[dia(3)]["irrigacao"] == 0  # sem lançamento, sem irrigação
+    # um novo lançamento atualiza o balanço na hora, sem nova consulta à Open-Meteo
+    r = c.post("/lancamentos", data={**lanc, "data": dia(1), "tempo": "", "lamina": "12"})
+    assert "balanço atualizado" in r.text and len(chamadas) == 1
+    assert resultados()[dia(1)]["irrigacao"] == pytest.approx(12)
     assert "ITN" in c.get("/manejo/1").text
 
     c.post("/logout")
@@ -250,7 +270,9 @@ def test_lancamentos(c, monkeypatch):
     assert c.post("/lancamentos/1/excluir").status_code == 404
     c.post("/logout")
     c.post("/login", data={"email": "a@x.com", "senha": "senha1234"})
-    assert "Lançamento excluído" in c.post("/lancamentos/1/excluir").text
+    r = c.post("/lancamentos/1/excluir")  # lançamento do dia(2)
+    assert "Lançamento excluído" in r.text and "balanço atualizado" in r.text
+    assert resultados()[dia(2)]["irrigacao"] == 0 and not resultados()[dia(2)]["lancada"]
 
 
 def test_seed_demo(c, monkeypatch):

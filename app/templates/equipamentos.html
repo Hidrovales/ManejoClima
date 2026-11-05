@@ -2,7 +2,7 @@
 {% block conteudo %}
 <h1 class="h4">Cadastro de equipamento</h1>
 {% if not fazendas %}
-<div class="alert alert-warning">Cadastre uma <a href="/">fazenda</a> antes de cadastrar equipamentos.</div>
+<div class="alert alert-warning">Cadastre uma <a href="/fazendas">fazenda</a> antes de cadastrar equipamentos.</div>
 {% else %}
 <form method="post" action="/equipamentos" class="card card-body shadow-sm mb-4">
   <div class="row g-3">

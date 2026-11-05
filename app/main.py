@@ -13,7 +13,7 @@ from starlette.middleware.sessions import SessionMiddleware
 from calculo.open_meteo import buscar_coordenadas
 
 from .db import Base, engine, get_db
-from .manejo import rodar_manejo, taxa_aplicacao
+from .manejo import recalcular_balanco, rodar_manejo, taxa_aplicacao
 from .models import Camada, Cultura, Equipamento, FaseCultura, Fazenda, Lancamento, Parcela, Solo, User
 
 # shortcut: create_all em vez de Alembic, adotar migrations quando o schema começar a mudar
@@ -86,8 +86,8 @@ def logout(request: Request):
     return RedirectResponse("/login", status_code=303)
 
 
-@app.get("/")
-def home(request: Request, user: User = Depends(exige_login)):
+@app.get("/fazendas")
+def lista_fazendas(request: Request, user: User = Depends(exige_login)):
     return render(request, "fazendas.html", user=user, fazendas=user.fazendas, erro=None)
 
 
@@ -103,7 +103,7 @@ def criar_fazenda(request: Request, nome: str = Form(...), proprietario: str = F
                    estado=estado.strip() or None, cidade=cidade.strip() or None,
                    latitude=latitude, longitude=longitude, altitude=altitude))
     db.commit()
-    return RedirectResponse("/", status_code=303)
+    return RedirectResponse("/fazendas", status_code=303)
 
 
 @app.get("/api/coordenadas")
@@ -286,11 +286,17 @@ def criar_parcela(request: Request, fazenda_id: int = Form(...), nome: str = For
     return RedirectResponse("/parcelas", status_code=303)
 
 
-def pagina_manejo(request: Request, user: User, erro: str | None = None, msg: str | None = None):
+AVISO_DADOS_PARCIAIS = ("Atenção: os dados diários obtidos podem ser parciais, pois ainda não estão disponíveis "
+                        "todos os dados meteorológicos do dia. Rode o manejo novamente mais tarde para atualizar.")
+
+
+def pagina_manejo(request: Request, user: User, erro: str | None = None, msg: str | None = None,
+                  aviso: str | None = None):
     return render(request, "manejo.html", user=user, parcelas=[p for f in user.fazendas for p in f.parcelas],
-                  erro=erro, msg=msg)
+                  erro=erro, msg=msg, aviso=aviso)
 
 
+@app.get("/")  # tela principal
 @app.get("/manejo")
 def manejo(request: Request, user: User = Depends(exige_login)):
     return pagina_manejo(request, user)
@@ -314,7 +320,7 @@ def rodar(request: Request, parcela_id: int, user: User = Depends(exige_login), 
     except requests.RequestException:
         db.rollback()
         return pagina_manejo(request, user, erro="Falha ao consultar a Open-Meteo. Tente novamente em instantes.")
-    return pagina_manejo(request, user, msg=msg)
+    return pagina_manejo(request, user, msg=msg, aviso=AVISO_DADOS_PARCIAIS)
 
 
 @app.get("/manejo/{parcela_id}")
@@ -347,9 +353,21 @@ def lancamentos(request: Request, user: User = Depends(exige_login)):
     return pagina_lancamentos(request, user)
 
 
+def atualizar_balanco(request: Request, user: User, db: Session, parcela: Parcela, acao: str):
+    """Refaz o balanço com os lançamentos atuais (sem Open-Meteo) se o manejo já foi rodado, para a irrigação aparecer no gráfico."""
+    if not parcela.resultados:
+        return pagina_lancamentos(request, user, msg=f"{acao}. Rode o manejo para ver o balanço.")
+    try:
+        recalcular_balanco(db, parcela)
+    except ValueError as e:
+        db.rollback()
+        return pagina_lancamentos(request, user, erro=f"{acao}, mas o balanço não foi atualizado: {e}")
+    return pagina_lancamentos(request, user, msg=f"{acao} e balanço atualizado. A irrigação já aparece no gráfico.")
+
+
 @app.post("/lancamentos")
-def criar_lancamento(request: Request, parcela_id: int = Form(...), data: datetime.date = Form(...),
-                     tipo: str = Form(...), valor: float = Form(...),
+def criar_lancamento(request: Request, parcela_id: int = Form(...), data: str = Form(...),
+                     tempo: str = Form(""), lamina: str = Form(""),
                      user: User = Depends(exige_login), db: Session = Depends(get_db)):
     def erro(msg):
         return pagina_lancamentos(request, user, erro=msg)
@@ -357,8 +375,21 @@ def criar_lancamento(request: Request, parcela_id: int = Form(...), data: dateti
     parcela = next((p for f in user.fazendas for p in f.parcelas if p.id == parcela_id), None)
     if parcela is None:
         return erro("Parcela inválida.")
-    if tipo not in LIMITE_LANCAMENTO:
-        return erro("Informe a irrigação por tempo ou por lâmina.")
+    for fmt in ("%d/%m/%Y", "%Y-%m-%d"):
+        try:
+            data = datetime.datetime.strptime(data.strip(), fmt).date()
+            break
+        except ValueError:
+            pass
+    else:
+        return erro("Data inválida. Use o formato dd/mm/aaaa.")
+    try:
+        informados = {t: float(v.replace(",", ".")) for t, v in (("tempo", tempo), ("lamina", lamina)) if v.strip()}
+    except ValueError:
+        return erro("Informe números no tempo ou na lâmina.")
+    if len(informados) != 1:
+        return erro("Informe o tempo ou a lâmina da irrigação (apenas um dos dois).")
+    (tipo, valor), = informados.items()
     if not parcela.manejo_inicio <= data <= min(parcela.manejo_fim, datetime.date.today()):
         return erro("A data deve estar dentro do período do manejo e não pode ser futura.")
     if not 0 <= valor <= LIMITE_LANCAMENTO[tipo]:
@@ -370,15 +401,16 @@ def criar_lancamento(request: Request, parcela_id: int = Form(...), data: dateti
     else:
         parcela.lancamentos.append(Lancamento(data=data, tipo=tipo, valor=valor, lamina_mm=lamina))
     db.commit()
-    return pagina_lancamentos(request, user, msg="Lançamento salvo. Rode o manejo para atualizar o balanço.")
+    return atualizar_balanco(request, user, db, parcela, "Lançamento salvo")
 
 
 @app.post("/lancamentos/{lancamento_id}/excluir")
 def excluir_lancamento(request: Request, lancamento_id: int, user: User = Depends(exige_login),
                        db: Session = Depends(get_db)):
-    lanc = next((x for f in user.fazendas for p in f.parcelas for x in p.lancamentos if x.id == lancamento_id), None)
-    if lanc is None:
+    achado = next(((p, x) for f in user.fazendas for p in f.parcelas for x in p.lancamentos if x.id == lancamento_id), None)
+    if achado is None:
         raise HTTPException(status_code=404)
-    db.delete(lanc)
+    parcela, lanc = achado
+    parcela.lancamentos.remove(lanc)  # delete-orphan apaga a linha e mantém a coleção em memória atualizada
     db.commit()
-    return pagina_lancamentos(request, user, msg="Lançamento excluído. Rode o manejo para atualizar o balanço.")
+    return atualizar_balanco(request, user, db, parcela, "Lançamento excluído")
